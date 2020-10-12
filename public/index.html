@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> Caller </title>
+    <style>
+        html {
+          box-sizing: border-box;
+        }
+        *, *:before, *:after {
+          box-sizing: inherit;
+        }
+        html, body {
+          height: 100%;
+          width: 100%;
+          margin: 0;
+          background-color: #E5FFFF;
+        }
+        .volume{
+          transform:rotateZ(90deg);
+          position:absolute;
+          bottom:-60px;
+          left:44%;
+        }
+        .title{
+          margin-top:3rem;
+        }
+        .container{
+        display:flex;
+        justify-content: center;
+        }
+        .wrapper{
+        display:flex;
+        flex-direction: column;
+        height:75vh;
+        justify-content: space-around;
+        align-items:center;
+        }
+        .button{
+            width:100%;
+        }
+      </style>
+</head>
+<body>
+<div class = "scene">
+<div class = "container">
+<div class = "wrapper">
+<h1 class = "title"> Balloon Party </h1>
+<img class = "button" src="img/Button.png" alt="button">
+<img class = "microphone" src="img/MicroIcon.png" alt="icon">
+</div>
+</div>
+<canvas class = "volume" width="40" height="250" data-val="0"></canvas>
+</div>
+<script src="/socket.io/socket.io.js"></script>
+<script src="vumeter.js"></script>
+<script>
+const $scene = document.querySelector(".scene");
+const $volumeMeter = document.querySelector(".volume");
+let id;
+let stream = "";
+const init = async() => {
+connectSocket();
+wrongConnection();
+stream = await audioStream();
+readAudio(stream);
+createVolumeMeter();
+}
+
+const SoundMeter = (context) => {
+  let instant = 0.0;
+  let slow = 0.0;
+  let clip = 0.0;
+  let script = context.createScriptProcessor(2048, 1, 1);
+  const that = this;
+  this.script.onaudioprocess = function(event) {
+    const input = event.inputBuffer.getChannelData(0);
+    let i;
+    let sum = 0.0;
+    let clipcount = 0;
+    for (i = 0; i < input.length; ++i) {
+      sum += input[i] * input[i];
+      if (Math.abs(input[i]) > 0.99) {
+        clipcount += 1;
+      }
+    }
+    that.instant = Math.sqrt(sum / input.length);
+    that.slow = 0.95 * that.slow + 0.05 * that.instant;
+    that.clip = clipcount / input.length;
+  };
+}
+
+const setAudioMeter = (value) =>{
+$volumeMeter.setAttribute("data-val",value);
+}
+
+const getUrlParameter = name => {
+  name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+  const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+  const results = regex.exec(location.search);
+  return results === null ? false : decodeURIComponent(results[1].replace(/\+/g, ' '));
+};
+
+const readAudio = (stream) => {
+   let audioContext = new AudioContext();
+   console.log(audioContext);
+   const analyser = audioContext.createAnalyser();
+   const reader = audioContext.createMediaStreamSource(stream);
+   let javascriptNode = audioContext.createScriptProcessor(2048,1,1);
+   analyser.smoothingTimeConstant = 0.8;
+  analyser.fftSize = 1024;
+  reader.connect(analyser);
+  analyser.connect(javascriptNode);
+  javascriptNode.connect(audioContext.destination);
+  javascriptNode.onaudioprocess = function() {
+   var array = new Uint8Array(analyser.frequencyBinCount); 
+   analyser.getByteFrequencyData(array);
+        var values = 0;
+        var length = array.length;
+        for (var i = 0; i < length; i++) {
+          values += (array[i]);
+        }
+        let average = values / length;
+        setAudioMeter(average);
+}
+}
+
+
+
+const audioStream = async () => {
+const constraints = {
+audio: true,
+video: false
+};
+const stream = await navigator.mediaDevices.getUserMedia(constraints);
+return stream;
+}
+
+const createVolumeMeter = () => {
+vumeter($volumeMeter,{
+"boxCount": 15,
+"boxGapFraction": 0.25,
+"max": 30,
+})
+}
+
+const wrongConnection = () => {
+    socket.on(`checkFailed`, data => {
+        if (data){
+            $scene.innerHTML = "<p> Wrong connection! scan QR code inside game </p>";
+        }
+    })
+}
+
+const connectSocket = () =>{
+socket = io.connect("/");
+const para = getUrlParameter("id");
+if (!para){
+$scene.innerHTML = "<p> no gameclient id! scan QR code inside game </p>";
+}
+else{
+socket.emit("checkID",para)
+}
+}
+init();
+</script>
+</body>
+</html>
