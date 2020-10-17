@@ -8,18 +8,24 @@ console.log(isDevelopment);
 //Nodejs express framework gebruiken
 const express = require('express');
 const app = express();
-options = {}
 
-const server = require('http').Server(options, app); // httpS instead of http
+//Server opstellen met SSL certificatte voor webcam gebruik met IP adres
+const fs = require('fs');
+const options = {
+  key: fs.readFileSync('./localhost.key'),
+  cert: fs.readFileSync('./localhost.crt')
+};
+const server = require('https').Server(options, app); // httpS instead of http
 //De port waar naar geluisterd moet worden
 const port = process.env.PORT || 52300;
 
 const io = require('socket.io')(server);
 
 
-let gameClient = "";
+let gameClientID = "";
 let gameConnected = false;
-let phoneClient = "";
+let phoneClientID = "";
+let clients = {}
 
 
 io.on('connection', function(socket){
@@ -27,21 +33,52 @@ console.log(`Connection Made:${socket.id}`);
 const obj = {
   id: socket.id
 }
+clients[socket.id] = {
+  socket: socket,
+  id: socket.id
+}
 if (!gameConnected){
-gameClient = obj;
-console.log(gameClient);
+gameClient = socket.id;
+console.log("Game");
 gameConnected = true;
 }
 else{
-phoneClient = obj;
+phoneClient = socket.id
+console.log("Phone");
+try {
+  io.to(gameClient).emit("phoneConnected",{
+    data: "true"
+});
 }
-socket.on('checkID',id => {
-  if (gameClient == "" || gameClient.id !== id){
-  console.log(phoneClient.id);
-  console.log(socket.id);
-  }
+catch(err) {
+  console.log(err);
+}
+}
+
+socket.on('buttonPressed', data => {
+io.to(gameClient).emit('buttonPressed',{
+  data: data
 });
 })
+
+socket.on('audioRead', data => {
+io.to(gameClient).emit('audioRead',{
+  data:data
+})
+})
+
+//Socket disconnect.
+socket.on('disconnect' , () => {
+  console.log('client disconnected');
+  delete clients[socket.id];
+  gameConnected = false;
+})
+
+
+});
+
+
+
 
 app.use(express.static('public'));
 

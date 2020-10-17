@@ -57,15 +57,25 @@
 <script src="vumeter.js"></script>
 <script>
 const $scene = document.querySelector(".scene");
+const $button = document.querySelector(".button");
 const $volumeMeter = document.querySelector(".volume");
 let id;
 let stream = "";
 const init = async() => {
 connectSocket();
-wrongConnection();
 stream = await audioStream();
 readAudio(stream);
 createVolumeMeter();
+checkButtonInput();
+}
+
+const handlePress = (e) => {
+  socket.emit(`buttonPressed`, true);
+}
+
+const checkButtonInput = () => {
+  $button.addEventListener("mousedown",handlePress);
+  $button.addEventListener("touchestart",handlePress);
 }
 
 const SoundMeter = (context) => {
@@ -123,6 +133,7 @@ const readAudio = (stream) => {
         }
         let average = values / length;
         setAudioMeter(average);
+        socket.emit(`audioRead`, average);
 }
 }
 
@@ -145,22 +156,13 @@ vumeter($volumeMeter,{
 })
 }
 
-const wrongConnection = () => {
-    socket.on(`checkFailed`, data => {
-        if (data){
-            $scene.innerHTML = "<p> Wrong connection! scan QR code inside game </p>";
-        }
-    })
-}
-
 const connectSocket = () =>{
-socket = io.connect("/");
 const para = getUrlParameter("id");
 if (!para){
 $scene.innerHTML = "<p> no gameclient id! scan QR code inside game </p>";
 }
 else{
-socket.emit("checkID",para)
+socket = io.connect("/");
 }
 }
 init();
